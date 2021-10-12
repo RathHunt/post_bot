@@ -87,14 +87,13 @@ capsub_no_text_error = icono(':expressionless: Buen intento, ahora ponlo bien')
 def acceso(id: int):
     m = bot.get_chat_member(id_canal, id).status
     # “creator”, “administrator”, “member”, “restricted”, “left” or “kicked”
-    if m == 'member' or m == 'creator' or m == 'administrator':
+    if m in ['member', 'creator', 'administrator']:
         return True
-    else:
-        try:
-            bot.send_message(id, t_ad)
-        except:
-            print(traceback.format_exc())
-        return False
+    try:
+        bot.send_message(id, t_ad)
+    except:
+        print(traceback.format_exc())
+    return False
 
 
 def inicio(id: int):
@@ -133,11 +132,11 @@ def log(temp: Temp, action: str):
         try:
             mssg = bot.send_message(
                 support,
-                heading +
-                f"{temp.titulo}\n" +
-                f"link:\n❌",
+                (heading + f"{temp.titulo}\n" + 'link:\n❌'),
                 parse_mode='html',
-                disable_web_page_preview=True)
+                disable_web_page_preview=True,
+            )
+
             temp.log_message = mssg
             db.set_temp(temp.id_user, temp)
         except:
@@ -213,7 +212,7 @@ def post_s(id: int, temp: Temp, index: int, kind: str):
     '''
         Crea la suguerencia de post
     '''
-    if (temp.search):
+    if temp.search:
         if kind == 'animanga':
             '''
             {'id': 30012,
@@ -224,7 +223,19 @@ def post_s(id: int, temp: Temp, index: int, kind: str):
             t = temp.search[index]['title']['romaji']
             f = temp.search[index]['format']
             l = temp.search[index]['coverImage']['extraLarge']
-        if kind == 'visualnovel':
+        elif kind == "game":
+            """
+            {
+                'coverImage': '//images.igdb.com/igdb/image/upload/t_cover_big/co2r2r.jpg', 
+                'title': 'Halo: Combat Evolved', 
+                'id': 740
+            }
+            """
+            t = temp.search[index]['title']
+            f = "Juego"
+            l = temp.search[index]['coverImage']
+
+        elif kind == 'visualnovel':
             '''{'aliases': 'クラナド', 
             'image_nsfw': False, 
             'image': 'https://s2.vndb.org/cv/52/24252.jpg', 
@@ -244,19 +255,6 @@ def post_s(id: int, temp: Temp, index: int, kind: str):
             t = temp.search[index]['title']
             f = 'Novela Visual'
             l = temp.search[index]['image']
-        if kind == "game":
-            """
-            {
-                'coverImage': '//images.igdb.com/igdb/image/upload/t_cover_big/co2r2r.jpg', 
-                'title': 'Halo: Combat Evolved', 
-                'id': 740
-            }
-            """
-            pass
-            t = temp.search[index]['title']
-            f = "Juego"
-            l = temp.search[index]['coverImage']
-
         capt = '<b>{0}\n\nFormato: {1}</b>'.format(error_Html(t), f)
         markup = InlineKeyboardMarkup()
         markup.row(InlineKeyboardButton(boton_sigui,
@@ -365,10 +363,11 @@ def filter(text: str):
     username_regex = r"\B@\w+"
     t_me_link = r"t\.me\/[-a-zA-Z0-9.]+(\/\S*)?"
 
-    if re.match(url_regex, text) or re.search(username_regex, text) or re.search(t_me_link, text):
-        return False
-
-    return True
+    return (
+        not re.match(url_regex, text)
+        and not re.search(username_regex, text)
+        and not re.search(t_me_link, text)
+    )
 
 
 def editar(message: Message, t: str, temp: Temp):
@@ -437,7 +436,7 @@ def editar(message: Message, t: str, temp: Temp):
                     _temp.post.imagen = None
                 elif t == 'anonymity':
                     if var == '/si':
-                        _temp.hidden_name = _temp.username if _temp.username else _temp.name
+                        _temp.hidden_name = _temp.username or _temp.name
                         _temp.username = None
                         _temp.name = None
 
@@ -545,14 +544,13 @@ def post_e(temp: Temp, id, markup=None):
                     id, temp.post.imagen, capt, parse_mode='html', reply_markup=markup).id
             except:
                 print(traceback.format_exc())
-            return vvvv
         else:
             try:
                 vvvv = bot.send_message(
                     id, capt, parse_mode='html', reply_markup=markup, disable_web_page_preview=True).id
             except:
                 print(traceback.format_exc())
-            return vvvv
+        return vvvv
     except:
         print(traceback.format_exc())
 
@@ -679,12 +677,12 @@ def callback_query(call: CallbackQuery):
             l = len(data)
 
             if data[0] == "select_platfrom":
-                if l == 3:
-                    temp.post.plata = data[1]
-                    temp.post.year = igdb.get_date(temp.search_id, data[2])
                 if l == 2:
                     temp.post.plata = data[1]
 
+                elif l == 3:
+                    temp.post.plata = data[1]
+                    temp.post.year = igdb.get_date(temp.search_id, data[2])
                 post_e(temp, call.from_user.id, markup_e())
                 db.set_temp(call.from_user.id, temp)
                 return
@@ -698,7 +696,7 @@ def callback_query(call: CallbackQuery):
                     inicio(call.from_user.id)
 
                 else:
-                    if data[0] == 'a' or data[0] == 'm':
+                    if data[0] in ['a', 'm']:
                         d = anilist.search(temp.titulo, data[0])
                         temp.search = d
                         post_s(call.from_user.id, temp, 0, 'animanga')
@@ -716,6 +714,39 @@ def callback_query(call: CallbackQuery):
                         post_e(temp, call.from_user.id, markup_e())
 
                     db.set_temp(call.from_user.id, temp)
+
+            elif l == 2:
+                if data[0] == 'e':
+                    if data[1] == 'c':
+
+                        try:
+                            sms = bot.send_message(
+                                call.from_user.id, t_cap, parse_mode='html')
+                        except:
+                            print(traceback.format_exc())
+                        bot.register_next_step_handler(sms, capsub, temp)
+                    elif data[1] == 'anonymity':
+                        try:
+                            sms = bot.send_message(
+                                call.from_user.id, '😑 aunque la comunidad no lo vea, los admins si, no lo intentes usar para el mal\n /si    /no')
+                        except:
+                            print(traceback.format_exc())
+                        bot.register_next_step_handler(
+                            sms, editar, data[1], temp)
+                    else:
+                        try:
+                            sms = bot.send_message(
+                                call.from_user.id, 'Envíe los nuevos datos o presione /borrar para borrar esa categoría.')
+                        except:
+                            print(traceback.format_exc())
+                        bot.register_next_step_handler(
+                            sms, editar, data[1], temp)
+                elif data[0] == 'm':
+                    markup = None
+                    markup = markup_e() if data[1] == '1' else markup_e1()
+                    temp.markup = markup
+                    db.set_temp(call.from_user.id, temp)
+                    post_e(temp, call.from_user.id, markup)
 
             elif l == 3:
                 if data[0] == 's':
@@ -794,48 +825,12 @@ def callback_query(call: CallbackQuery):
                         temp.post.descripcion = translate.traducir(
                             error_Html(p['description']))
                         temp.post.game_modes = p['game_modes']
-                        temp.post.plata = p['platforms'] if p['platforms'] else '‼editar'
+                        temp.post.plata = p['platforms'] or '‼editar'
                         temp.search_id = p["id"]
 
                     db.set_temp(call.from_user.id, temp)
 
                     post_e(temp, call.from_user.id, markup_e())
-
-            elif l == 2:
-                if data[0] == 'e':
-                    if data[1] == 'c':
-
-                        try:
-                            sms = bot.send_message(
-                                call.from_user.id, t_cap, parse_mode='html')
-                        except:
-                            print(traceback.format_exc())
-                        bot.register_next_step_handler(sms, capsub, temp)
-                    elif data[1] == 'anonymity':
-                        try:
-                            sms = bot.send_message(
-                                call.from_user.id, '😑 aunque la comunidad no lo vea, los admins si, no lo intentes usar para el mal\n /si    /no')
-                        except:
-                            print(traceback.format_exc())
-                        bot.register_next_step_handler(
-                            sms, editar, data[1], temp)
-                    else:
-                        try:
-                            sms = bot.send_message(
-                                call.from_user.id, 'Envíe los nuevos datos o presione /borrar para borrar esa categoría.')
-                        except:
-                            print(traceback.format_exc())
-                        bot.register_next_step_handler(
-                            sms, editar, data[1], temp)
-                elif data[0] == 'm':
-                    markup = None
-                    if data[1] == '1':
-                        markup = markup_e()
-                    else:
-                        markup = markup_e1()
-                    temp.markup = markup
-                    db.set_temp(call.from_user.id, temp)
-                    post_e(temp, call.from_user.id, markup)
 
         else:
             introducc(call.from_user.id, call.from_user.first_name)
